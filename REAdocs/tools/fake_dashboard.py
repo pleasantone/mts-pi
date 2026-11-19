@@ -67,6 +67,8 @@ class Dashboard:
     def __init__(self, reader, writer, rev, frames):
         self.r, self.w, self.rev, self.frames_left = reader, writer, rev, frames
         self.C, self.sleep = C, asyncio.sleep
+        self.quiet = False      # suppress the per-packet print (for the many frames of --game)
+        self.capture = None     # a list to collect received frames as PIL images, or None
 
     def _decode(self, op, body):
         try:
@@ -117,15 +119,70 @@ class Dashboard:
             hdr = await self.r.readexactly(9)
             op, word, length = struct.unpack("<BII", hdr)
             body = await self.r.readexactly(length)
-            print(ts(), f"PHONE> {op:3d} {NAMES.get(op, '?'):15s} word={word} len={length}", self._decode(op, body),
-                  "| hex", (hdr + body)[:40].hex(), flush=True)
+            if not self.quiet:
+                print(ts(), f"PHONE> {op:3d} {NAMES.get(op, '?'):15s} word={word} len={length}", self._decode(op, body),
+                      "| hex", (hdr + body)[:40].hex(), flush=True)
             if op == C.Op.PING:
                 self.send(C.Op.PONG, self.rev.parse(op, body))
-            elif op == C.Op.FRAME and self.frames_left > 1:
-                # like the real dashboard: one request outstanding, the next one after each FRAME
-                self.frames_left -= 1
-                self.send(C.Op.FRAME_WANTED, {"screen": 0, "x": 0, "y": 0, "width": 848, "height": 304,
-                                              "incremental": 1})
+            elif op == C.Op.FRAME:
+                if self.capture is not None:
+                    import io
+                    try:
+                        self.capture.append(Image.open(io.BytesIO(self.rev.parse(op, body)["picture"])).convert("RGB"))
+                    except Exception as e:
+                        print(ts(), "capture decode failed:", e, flush=True)
+                    self.send(C.Op.FRAME_WANTED, {"screen": 0, "x": 0, "y": 0, "width": 848, "height": 304,
+                                                  "incremental": 1})
+                elif self.frames_left > 1:
+                    # like the real dashboard: one request outstanding, the next one after each FRAME
+                    self.frames_left -= 1
+                    self.send(C.Op.FRAME_WANTED, {"screen": 0, "x": 0, "y": 0, "width": 848, "height": 304,
+                                                  "incremental": 1})
+
+
+async def run_game(a, rev):
+    """Play paddle_game.py through the real PhoneProjection, capture the frames the dashboard receives, save a GIF.
+
+    This proves the whole Track 1 pipeline with no bike and no ESP32: game.render -> JPEG -> mySPIN FRAME ->
+    the (fake) dashboard decodes it. The game is driven by a ~fps Hz tick that advances physics and bumps version,
+    which is the one thing a static Hello World screen lacks."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))     # -I drops the script dir from sys.path
+    from paddle_game import PaddleGame
+    game = PaddleGame(auto_player=True)     # computer vs computer, so the GIF shows a full rally without a human
+    phone_ref, holder = {}, {}
+    done = asyncio.get_running_loop().create_future()
+
+    async def on_conn(reader, writer):
+        d = Dashboard(reader, writer, rev, 10 ** 9)
+        d.quiet, d.capture, holder["d"] = True, [], d
+        rx = asyncio.create_task(d.receive_loop())
+        try:
+            await d.setup()
+            for _ in range(int(a.seconds * a.fps)):
+                game.tick()
+                phone_ref["p"].screen_changed()     # wake the feed now instead of waiting for its 40 ms poll
+                await asyncio.sleep(1.0 / a.fps)
+        finally:
+            await asyncio.sleep(0.2)
+            rx.cancel()
+            writer.close()
+            done.set_result(None)
+
+    srv = await asyncio.start_server(on_conn, "127.0.0.1", 0)
+    r, w = await asyncio.open_connection("127.0.0.1", srv.sockets[0].getsockname()[1])
+    phone_ref["p"] = PhoneProjection(r, w, game, phone_log, 80, a.bt_info, [1, 2, 3])
+    run = asyncio.create_task(phone_ref["p"].run())
+    await done
+    try:
+        await asyncio.wait_for(run, 3)
+    except Exception:
+        pass
+    d = holder["d"]
+    print(f"captured {len(d.capture)} frames; final score left {game.score[0]} : {game.score[1]} right", flush=True)
+    if a.gif and d.capture:
+        frames = [im.resize((424, 152)) for im in d.capture]
+        frames[0].save(a.gif, save_all=True, append_images=frames[1:], duration=int(1000 / a.fps), loop=0, optimize=True)
+        print("wrote", a.gif, flush=True)
 
 
 async def main():
@@ -135,9 +192,16 @@ async def main():
     ap.add_argument("--frames", type=int, default=50, help="how many frames to request in total")
     ap.add_argument("--tail", type=float, default=1.0, help="seconds to keep listening after the scenario")
     ap.add_argument("--bt-info", default=None, help='e.g. "[HFP,A2DP]ESP32" (sent as PHONE_CUSTOM kind 1 code 1)')
+    ap.add_argument("--game", action="store_true", help="run paddle_game.py through the real mySPIN session")
+    ap.add_argument("--gif", default=None, help="--game: write the frames the dashboard received to this GIF")
+    ap.add_argument("--seconds", type=float, default=12.0, help="--game: how long to play")
+    ap.add_argument("--fps", type=float, default=15.0, help="--game: physics/frame tick rate")
     a = ap.parse_args()
 
     rev = R.REVISIONS[tuple(int(x) for x in a.rev.split("."))]
+    if a.game:
+        await run_game(a, rev)
+        return
     ns = {}
     exec(open(a.scenario).read(), ns)
     done = asyncio.get_running_loop().create_future()

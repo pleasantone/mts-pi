@@ -48,6 +48,19 @@ cd REAdocs/tools
 ./run.sh fake_control.py '{"phoneDetectRequest":{"type":"iviDetectResponse","version":"3","payload":{}}}'
 ```
 
+`paddle_game.py` is a reference game as a mySPIN `frames` object (the Track 1 "Hello World" capstone — a paddle
+game played with the joystick against the computer). Play it through the real session and record the result:
+
+```bash
+# writes the frames the dashboard received to a GIF (needs a writable output mount, so not via run.sh):
+docker run --rm --platform linux/arm64 -w /tools \
+  -v "$PWD/../../myspin:/target/myspin:ro" -v "$PWD:/tools:ro" -v /tmp:/out \
+  myspin-re python -I /tools/fake_dashboard.py --game --seconds 16 --gif /out/paddle.gif
+```
+
+`tools/paddle-demo.gif` is a recording of exactly that: the game rendered by the phone code, JPEG-encoded, carried
+over the mySPIN FRAME messages, and decoded by the fake dashboard — no bike or ESP32 involved.
+
 `fake_control.py` takes a JSON object mapping each phone message type to the bike's reply (or a list of replies);
 `myspin-protocol.md` lists the full exchange to script.
 

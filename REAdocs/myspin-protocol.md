@@ -493,6 +493,21 @@ Build the standalone ESP32 version with ESP-IDF, not Arduino-ESP32. This project
 
 **Bench setup.** Run the fake dashboard on the Mac on your home Wi-Fi and point the ESP32 at it with a build flag that skips Bluetooth and the Wi-Fi Direct join. Session, frames and joystick can then be finished at a desk before the first trip to the garage.
 
+### A playable demo: a paddle game (Track 1 capstone)
+
+A paddle-and-ball game — an original game in that genre, not a reproduction of any branded title — is the natural Hello World for this build. It is cheap to draw and it exercises the whole bike link at once: continuous rendering, the joystick, and the latency. It needs only the pieces the mySPIN session already hands you:
+
+- **`render(w, h)`:** a black field, two paddles, a ball, two scores. A near-black 848×304 frame is a tiny JPEG, so the encode load is well below the CarPlay path.
+- **`on_key(key, action)`:** UP/DOWN held move the player's paddle (they arrive as PRESS → RELEASE on the real bike), OK serves. You own this handler, so you choose the mapping.
+- **`tick()`:** a \~15 Hz timer steps the ball and the computer paddle and bumps `version`. This is the one thing a static Hello World lacks; on the ESP32 it is a FreeRTOS timer.
+- **the opponent:** move the computer paddle toward the ball, capped below the ball's reach so it is beatable. A few lines.
+
+Scores are drawn with a 3×5 block font made of rectangles, so there is no font-library dependency — the same approach the ESP32 uses. At \~10–15 fps the joystick-to-screen round trip is \~100–250 ms; a paddle game tolerates that, and scaling the ball speed to the measured frame rate keeps it playing the same regardless.
+
+**Build and play it on the bench first.** `REAdocs/tools/paddle_game.py` is the reference `frames` object, and `fake_dashboard.py --game --gif out.gif` runs it through the real mySPIN session — no bike, no ESP32 — and saves the frames the dashboard actually received. A recording of that run is in the repository at `tools/paddle-demo.gif`: the game rendered by the phone code, JPEG-encoded, carried over the mySPIN FRAME messages, and decoded by the fake dashboard. Porting to the ESP32 keeps the same four pieces.
+
+![The paddle game rendered by the phone code and carried over the real mySPIN session to the fake 848x304 dashboard](tools/paddle-demo.gif)
+
 ## The CarPlay side (second processor)
 
 The mySPIN half only paints the picture it is given and forwards joystick events. Something must produce that picture from the iPhone's CarPlay and turn the joystick into CarPlay input. On the Pi that is the Carlinkit dongle plus `mtspi/bridge.py`; on a microcontroller build it is a second processor beside the mySPIN ESP32. Two designs follow, both using a **leaked MFi key** as the software authentication signer — acceptable only because this is a private, educational build (see the caveat at the end).
