@@ -559,6 +559,38 @@ You are right: the screen size is told to CarPlay, so there is no cropping or tr
 
 The software signer uses an Apple MFi key extracted from Carlinkit / DiPlay firmware. It was never issued to this project, Apple can revoke it, and an iOS update may stop it working. Fine for a private bench or bike experiment; never distribute it or anything built on it. Design B (a dongle with its own licensed chip) is the only path that avoids this.
 
+## Recommended build
+
+This document now holds two separate projects. Keep them apart, and start with the first.
+
+### Track 1 — the standalone mySPIN "Hello World" (the core project)
+
+One original ESP32, no iPhone and no CarPlay. It joins the bike over Bluetooth and Wi-Fi Direct and draws its own 848×304 screen on the dashboard, moved by the handlebar joystick. It stands entirely on its own, it is the cheapest build here, and it is the right first milestone whether or not CarPlay ever follows. Everything it needs is in **ESP32 plan** and **mySPIN session protocol** above; nothing in the CarPlay discussion is required for it.
+
+- **Hardware:** one ESP32-WROVER-E (original ESP32, Bluetooth Classic, PSRAM) — about $6–10. That is the whole bill: no iPhone, no dongle, no MFi chip.
+- **What it proves:** the bike link end to end — pairing, the Wi-Fi Direct join, the TCP session, a picture on the dashboard, and the joystick coming back. Once it works you have a reference implementation of every mySPIN layer.
+- **The one risk:** joining the bike's Wi-Fi Direct group from an ESP32 (see "Wi-Fi Direct on the ESP32"). Settle it on a Pi first.
+
+### Track 2 — feeding real CarPlay to the bike (optional, larger)
+
+Only if you later want the iPhone's actual CarPlay on the dashboard. This adds Apple's MFi authentication and H.264 decoding, and that is where a small Linux board earns its place over an ESP32: hardware H.264 decode, a proven radio stack, and this repo's mySPIN code already runs on a Pi.
+
+The dongle question is decided by radio contention: wireless CarPlay needs the iPhone to have its own Bluetooth and Wi-Fi, so a dongle supplies them; wired CarPlay puts the iPhone on USB and frees the board's radio for the bike, so no dongle is needed.
+
+| Build | Hardware | \~Cost (q1) | Authentication |
+| --- | --- | --- | --- |
+| Wireless (= MTS Pi, most proven) | Pi Zero 2 W + Carlinkit CPC200-CCPA + OTG adapter | \~$45 | the dongle's genuine chip |
+| Wired, cheapest | Pi Zero 2 W + a small powered USB splitter | \~$20–30 | leaked software key |
+| Wired, robust auth | Pi Zero 2 W + MFI343S00177 + breakout + CH341A | \~$35–45 | genuine chip (Design A+) |
+
+The Pi Zero 2 W is $15 at list, about $18–24 from resellers.
+
+### Order of work
+
+1. **Track 1 on an ESP32** — the standalone Hello World. This is the self-contained educational project and needs none of the CarPlay parts.
+2. **Track 2 on a Pi Zero 2 W**, starting wireless with a dongle (it is this repo, unchanged), then wired dongle-free on the same Pi.
+3. **Shrink to ESP32 only after the Pi version works** and you have measured what the bike actually needs — the two-ESP32 (P4 + original) design is the end-goal miniaturization, not the development platform.
+
 ## Open questions
 
 Six facts about the real V4 S are not in this repository. All of them come out of the first logs in milestones 2–4, or from one Pi session with logging on (`/var/lib/mtspi/run-*/`).
