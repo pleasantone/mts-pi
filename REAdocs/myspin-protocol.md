@@ -523,6 +523,15 @@ This is exactly what [CarPlay-Tab5](https://github.com/sky18Dragon/CarPlay-Tab5)
 - **Cost of dropping the dongle:** a short USB cable from the phone to the box. On the bike the iPhone sits in the tank compartment on that cable — about where MTS Pi already keeps the phone and dongle.
 - **The number that decides it:** the P4's software H.264 decode speed at 848×304. CarPlay-Tab5 reports about 16 fps at 890×240; 848×304 is close, so it is plausible but unmeasured. Measure this first.
 
+### Design A+ — wired with a real MFi chip
+
+Same as Design A, but the software signer is replaced by a genuine Apple authentication coprocessor on the P4's I²C bus (the xcertplay / LIVI approach). A real chip beats the leaked key on robustness: Apple cannot revoke an individual chip and it survives iOS updates — the leaked key's two failure modes.
+
+- **Chip:** MFI343S00177 (Microchip, gen 3.0 / ECC) is about $1.16 at LCSC or $1.80 on eBay in single quantity; the older MFI337S3959 (Infineon, gen 2.0C / RSA, the generation the CPC200-CCPA uses) is \~$2.29 but sold in distributor minimum-order quantities. Verify your receiver stack supports the chip's generation before buying.
+- **The catch:** these are 2–3 mm no-lead SMD parts (XDFN-8 / QFN-8), not breakout boards. You need reflow and a breakout PCB (~~$1–2), plus a CH341A USB-to-I²C adapter (~~$2–5) to exercise the chip from a PC. Realistic single-unit "usable" cost is \~$15–25, not $1.
+- **Grey-market caveat:** Apple sells these only to MFi licensees, so retail units are diverted or pulled stock; a dead or re-marked chip fails authentication silently. Buy from a reputable stockist and check the markings.
+- **When it is worth it:** only for a wired, dongle-free build that also wants authentication that will not rot. If you just want a real chip with the least hassle, a whole CPC200-CCPA dongle (\~$27) already has one soldered and working (Design B).
+
 **On the codec (why the decode is unavoidable).** CarPlay emits only H.264, or optionally HEVC — both inter-frame codecs that must be decoded; there is no JPEG or raw CarPlay mode, and HEVC is harder to decode, not easier. The dashboard wants JPEG, not H.264, so the stream cannot be passed through untouched either. The pipeline is therefore fixed: decode H.264 (the P4 has no hardware H.264 decoder, so this is the one expensive step, done in software) then encode JPEG (free — the P4 does it in hardware). The only levers on the decode cost are the frame it is asked to produce: 848×304 is small and the bike only shows 7–13 fps anyway, so ask CarPlay for exactly that size and a low fps. If software decode still cannot keep up, the fix is a chip with a hardware H.264 decoder (a small Linux SBC such as a Pi Zero 2 W), not a different CarPlay codec.
 
 ### Design B — wireless, with the cheapest dongle
