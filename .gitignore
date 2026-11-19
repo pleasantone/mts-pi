@@ -1,3 +1,14 @@
 __pycache__/
 *.pyc
 .venv/
+
+# macOS
+.DS_Store
+
+# Session handoffs and other temporary notes: local only, never committed
+HANDOFF*.md
+*.local.md
+scratch/
+
+# Claude Code: per-user settings stay local (project settings in .claude/settings.json may be shared)
+.claude/settings.local.json
