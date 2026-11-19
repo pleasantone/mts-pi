@@ -508,6 +508,16 @@ Scores are drawn with a 3×5 block font made of rectangles, so there is no font-
 
 ![The paddle game rendered by the phone code and carried over the real mySPIN session to the fake 848x304 dashboard](tools/paddle-demo.gif)
 
+### Beyond Hello World: Doom
+
+Doom is the famous "runs on everything" target, and it fits this build the same way the paddle game does: the standard port layer, [doomgeneric](https://github.com/ozkl/doomgeneric), asks for exactly our interface — `DG_DrawFrame` hands you a framebuffer (scale to 848×304, JPEG, send over mySPIN) and `DG_GetKey` takes input (the joystick). So the mySPIN side is easy; the hard parts are elsewhere:
+
+- **RAM and flash:** Doom needs a few MB of working set and a \~4 MB WAD, so a WROVER (8 MB PSRAM) plus ≥4 MB flash, not a bare ESP32.
+- **CPU:** the software renderer plus the per-frame scale + JPEG + Wi-Fi is heavy; on the original ESP32 expect single-digit fps — fine for Pong, sluggish for a shooter.
+- **Input:** on the real V4 S, LEFT/RIGHT are click-only (no hold), so turning is step-by-step; UP/DOWN hold for forward/back, OK fires. Playable as a tech demo, awkward as real Doom.
+
+It fits best on the **ESP32-P4** (the CarPlay-side chip): enough CPU to run Doom and a hardware JPEG encoder, so Doom becomes just another frame source → SPI → the original ESP32 → mySPIN, reusing the CarPlay plumbing with Doom in place of CarPlay. Use [Freedoom](https://freedoom.github.io/) (free/libre assets) with the GPL Doom engine, so nothing recreates id's content — it is porting existing open-source software. Effort from an existing ESP32 Doom port: one to two weeks, almost all of it fps, RAM and input, not the bike link.
+
 ## The CarPlay side (second processor)
 
 The mySPIN half only paints the picture it is given and forwards joystick events. Something must produce that picture from the iPhone's CarPlay and turn the joystick into CarPlay input. On the Pi that is the Carlinkit dongle plus `mtspi/bridge.py`; on a microcontroller build it is a second processor beside the mySPIN ESP32. Two designs follow, both using a **leaked MFi key** as the software authentication signer — acceptable only because this is a private, educational build (see the caveat at the end).
