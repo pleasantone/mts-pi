@@ -31,3 +31,12 @@ Decisions of 18 Nov 2026:
 - Rationale: wireless needs the iPhone's own radios (-> dongle); wired puts the iPhone on USB and frees the board's
   radio for the bike (-> no dongle). A Pi has hardware H.264 decode (the ESP32-P4's weak spot) and runs the mySPIN
   code already. Develop Track 2 on the Pi; the two-ESP32 (P4 + original) design is the end-goal shrink, not the dev platform.
+
+**Boards (19 Nov 2026) — the 64-bit line matters:**
+- The closed `myspin/` binaries are aarch64 (64-bit). The reference code and the bench tools need a 64-bit board.
+- Original **Pi Zero W = ARMv6, 32-bit**: CANNOT run the myspin binaries / MTS Pi / fake_dashboard. Single core;
+  OK to host your OWN mySPIN Hello World (Track 1), marginal for wired CarPlay (and CarPlay receiver software is
+  Rust/GStreamer targeting ARMv7+/NEON, which it lacks).
+- **Pi Zero 2 W = Cortex-A53, 64-bit**: can run the reference + tools; the right small board for Track 2. ~$15-24.
+- USB OTG: every Zero has it (host/gadget) -> hosting the iPhone over USB is fine on either.
+- Wi-Fi: both Zeros are 2.4 GHz-only; only Pi 3 A+/3B+/4 are dual-band. 5 GHz bike group -> need a Pi 3A+/4. See [[open-questions]] (band).

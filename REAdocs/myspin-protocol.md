@@ -616,6 +616,17 @@ The Pi Zero 2 W is $15 at list, about $18–24 from resellers.
 2. **Track 2 on a Pi Zero 2 W**, starting wireless with a dongle (it is this repo, unchanged), then wired dongle-free on the same Pi.
 3. **Shrink to ESP32 only after the Pi version works** and you have measured what the bike actually needs — the two-ESP32 (P4 + original) design is the end-goal miniaturization, not the development platform.
 
+### Boards: the 64-bit line matters
+
+A note on Raspberry Pi choices, since it is easy to grab the wrong Zero:
+
+- **The closed `myspin/` binaries are aarch64 (64-bit).** Any board that runs the reference code (`mtspi/session.py`) or the bench tools must be 64-bit. The original **Pi Zero W is ARMv6, 32-bit** — it cannot load them. The **Pi Zero 2 W (Cortex-A53) is 64-bit** and can, as are the Pi 3 A+ and Pi 4.
+- **USB OTG:** every Zero has an OTG data port (host or gadget), so hosting the iPhone over USB for wired CarPlay is not the obstacle on either board.
+- **CPU:** the original Zero W is a single ARMv6 core — fine for a light standalone mySPIN Hello World (Track 1) running your own code, but marginal for wired CarPlay, and much of the CarPlay-receiver software (Rust / GStreamer) targets ARMv7+/NEON, which it lacks. The Zero 2 W (quad Cortex-A53) is the right small board.
+- **Wi-Fi band:** both Zeros are 2.4 GHz-only; only the Pi 3 A+/3B+/4 are dual-band. If the bike's mySPIN group is 5 GHz, neither Zero can join it — an open question until the band is logged.
+
+Guidance: develop Track 1 on whatever Pi you have (a shelf Zero W can host your own implementation); for the CarPlay design, and for running the reference code and the bench tools, use a 64-bit Pi Zero 2 W.
+
 ## Open questions
 
 Six facts about the real V4 S are not in this repository. All of them come out of the first logs in milestones 2–4, or from one Pi session with logging on (`/var/lib/mtspi/run-*/`).
