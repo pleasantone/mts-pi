@@ -493,6 +493,63 @@ Build the standalone ESP32 version with ESP-IDF, not Arduino-ESP32. This project
 
 **Bench setup.** Run the fake dashboard on the Mac on your home Wi-Fi and point the ESP32 at it with a build flag that skips Bluetooth and the Wi-Fi Direct join. Session, frames and joystick can then be finished at a desk before the first trip to the garage.
 
+## The CarPlay side (second processor)
+
+The mySPIN half only paints the picture it is given and forwards joystick events. Something must produce that picture from the iPhone's CarPlay and turn the joystick into CarPlay input. On the Pi that is the Carlinkit dongle plus `mtspi/bridge.py`; on a microcontroller build it is a second processor beside the mySPIN ESP32. Two designs follow, both using a **leaked MFi key** as the software authentication signer — acceptable only because this is a private, educational build (see the caveat at the end).
+
+**Why a second chip.** CarPlay needs USB host and H.264 decoding; mySPIN needs Bluetooth Classic and Wi-Fi Direct. No single ESP32 has all four, so the CarPlay side is its own processor, linked to the mySPIN ESP32 by SPI.
+
+### Design A — dongle-free, wired (preferred, cheapest)
+
+```mermaid
+flowchart LR
+    I["iPhone<br/>wired CarPlay over USB"]
+    P["ESP32-P4<br/>software MFi (leaked key)<br/>H.264 decode, 848x304 JPEG<br/>no dongle, no chip"]
+    E["ESP32 (original)<br/>mySPIN radios<br/>Bluetooth + Wi-Fi Direct"]
+    D["V4 S dashboard<br/>848x304 screen"]
+    I -- USB --> P
+    P -- SPI --> E
+    E -- mySPIN --> D
+    D -. "joystick back, becomes CarPlay key codes" .-> P
+```
+
+*Design A: dongle-free wired CarPlay, two chips.*
+
+The iPhone plugs straight into an **ESP32-P4** over USB. Wired CarPlay runs its whole iAP2 + AirPlay session over that cable, with no Bluetooth and no Wi-Fi, so no dongle and no radio co-processor are needed for CarPlay itself. A leaked MFi key signs the authentication challenge in software. The P4 decodes the H.264 in software, encodes 848×304 JPEG in hardware, and hands frames to the mySPIN ESP32 over SPI; joystick events return the same way and become CarPlay key codes.
+
+This is exactly what [CarPlay-Tab5](https://github.com/sky18Dragon/CarPlay-Tab5) already does (ESP32-P4, iPhone over USB-A, leaked key in `secrets/mfi/`, OpenH264 software decode, tested on iOS 16 and 26, GPL-3.0). Start from its source.
+
+- **Hardware:** an ESP32-P4 board (the M5Stack Tab5 matches CarPlay-Tab5 exactly) plus the original ESP32 for mySPIN. Two bare boards, roughly $10–20 each.
+- **Cost of dropping the dongle:** a short USB cable from the phone to the box. On the bike the iPhone sits in the tank compartment on that cable — about where MTS Pi already keeps the phone and dongle.
+- **The number that decides it:** the P4's software H.264 decode speed at 848×304. CarPlay-Tab5 reports about 16 fps at 890×240; 848×304 is close, so it is plausible but unmeasured. Measure this first.
+
+**On the codec (why the decode is unavoidable).** CarPlay emits only H.264, or optionally HEVC — both inter-frame codecs that must be decoded; there is no JPEG or raw CarPlay mode, and HEVC is harder to decode, not easier. The dashboard wants JPEG, not H.264, so the stream cannot be passed through untouched either. The pipeline is therefore fixed: decode H.264 (the P4 has no hardware H.264 decoder, so this is the one expensive step, done in software) then encode JPEG (free — the P4 does it in hardware). The only levers on the decode cost are the frame it is asked to produce: 848×304 is small and the bike only shows 7–13 fps anyway, so ask CarPlay for exactly that size and a low fps. If software decode still cannot keep up, the fix is a chip with a hardware H.264 decoder (a small Linux SBC such as a Pi Zero 2 W), not a different CarPlay codec.
+
+### Design B — wireless, with the cheapest dongle
+
+If a cable to the phone is unacceptable, keep the dongle but let it do the hard parts. A **Carlinkit CPC200-CCPA** already contains a genuine MFi chip, Bluetooth and 5 GHz Wi-Fi, and speaks a USB protocol this repository already implements (`mtspi/carlinkit.py`, `carlinkit_usb.py`, a port of node-CarPlay). The P4 — or even the original ESP32, if it only relays — reads that USB stream instead of talking to the iPhone directly.
+
+- **Cheapest source:** the CPC200-CCPA is about **$27–30** on AliExpress / Alibaba in single quantities, versus \~$65 on the official stores. Buy the CPC200-CCPA specifically: the repo's code only knows its USB IDs (1314:1520 / 1314:1521); a cheaper generic dongle may use a different protocol.
+- **Trade-off:** +$27 and a part, but genuine Apple authentication, real 5 GHz wireless, and no leaked key.
+
+### Telling CarPlay the screen size — yes, 848×304 directly
+
+You are right: the screen size is told to CarPlay, so there is no cropping or transformation. In this repo the dongle's **Open** message carries the resolution — `send_open(width, height, fps)` in `mtspi/carlinkit.py`, default **848×304** — and the README records that on the real V4 S "CarPlay is asked for exactly that size. Nothing is scaled, and there are no black bands." CarPlay is built for varied car screens and renders its UI natively at the size it is given. For a direct wired P4 build the same resolution goes into the CarPlay stream setup. Two practical rules: width and height should be even (the repo rounds down with `& ~1`), and stay with a real dashboard size like 848×304 rather than an extreme one. The repo keeps a letterbox fallback in `render()` for odd aspect ratios, but at 848×304 it never triggers.
+
+### Other reference projects
+
+| Project | Platform | Authentication | Note |
+| --- | --- | --- | --- |
+| CarPlay-Tab5 | ESP32-P4, wired | leaked key | the Design A starting point |
+| esp32-carplay-web-relay | original ESP32, wireless | leaked key | BT-Classic iAP2; relays H.264, no decode; low fps |
+| carplayd | Pi 4 + Carlinkit as signer | the dongle's chip | wired H.264 at 45.9 fps on Linux |
+| LIVI | Linux / Pi / Android, Rust | real MFi chip or add-on | most complete open receiver |
+| xcertplay / DiPlay | Android head units | chip, key file, or remote signer | ancestor of the ESP32 projects |
+
+### Caveat on the leaked key
+
+The software signer uses an Apple MFi key extracted from Carlinkit / DiPlay firmware. It was never issued to this project, Apple can revoke it, and an iOS update may stop it working. Fine for a private bench or bike experiment; never distribute it or anything built on it. Design B (a dongle with its own licensed chip) is the only path that avoids this.
+
 ## Open questions
 
 Six facts about the real V4 S are not in this repository. All of them come out of the first logs in milestones 2–4, or from one Pi session with logging on (`/var/lib/mtspi/run-*/`).

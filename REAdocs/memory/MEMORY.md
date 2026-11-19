@@ -9,3 +9,4 @@ Repository-scope memory for the mySPIN reverse-engineering work. One fact per fi
 - [Platform decisions](platform-decisions.md) — Pi 4, Mac + Pi 4, original ESP32 with ESP-IDF + BTstack, Wi-Fi Direct levels
 - [Repo workflow](repo-workflow.md) — fork/upstream remotes, `readocs` branch, handoff never committed
 - [Working preferences](working-preferences.md) — plan and document before code; ask before executing
+- [CarPlay side](carplay-side.md) — dongle-free wired ESP32-P4 (leaked key) vs the cheapest Carlinkit dongle; H.264 decode is the risk

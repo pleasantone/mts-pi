@@ -14,6 +14,8 @@ Decisions of 18 Nov 2026:
   Mac's TCP session over Ethernet. Needs a `--radio-only` mode in `session.py` that does not exist yet.
 - **ESP32:** original ESP32 only (S2/S3/C3/C6 lack Bluetooth Classic), WROVER-E with PSRAM, ESP-IDF 5.x (not
   Arduino), BTstack preferred over Bluedroid (custom SDP UUID + channel 22). Pictures = precomputed baseline JPEGs.
+- **CarPlay side (second processor):** separate chip, see [[carplay-side]]. Preferred: dongle-free wired ESP32-P4
+  with a leaked MFi key (Design A). Alternative: cheapest Carlinkit CPC200-CCPA for wireless (Design B).
 - **Wi-Fi Direct on ESP32:** level 1 legacy WPS-PIN join (days) first; level 2 P2P IE + provision discovery via
   `esp_wifi_set_vendor_ie` / `esp_wifi_80211_tx` only if needed; full Wi-Fi Direct not needed. Settle with the Pi
   experiment in [[open-questions]] first.
